@@ -41,9 +41,11 @@ def configure_page() -> None:
     st.markdown("""
     <style>
     .main-header {
-        font-size: 2.2rem;
-        font-weight: 700;
-        color: #2c3e50;
+        font-size: 2.4rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
         margin-bottom: 0;
     }
     .sub-header {
@@ -51,13 +53,7 @@ def configure_page() -> None:
         color: #7f8c8d;
         margin-top: -10px;
         margin-bottom: 20px;
-    }
-    .metric-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        border-radius: 12px;
-        padding: 20px;
-        color: white;
-        text-align: center;
+        line-height: 1.6;
     }
     .stMetric > div {
         background-color: #f8f9fa;
@@ -134,6 +130,9 @@ def render_overview_tab(df: pd.DataFrame, summary: "DataSummary") -> None:  # no
 
     # Top metrics row
     metric_cols = get_metric_columns(df)
+    if not metric_cols:
+        st.warning("No recognized health metric columns found in this dataset.")
+        return
     cols = st.columns(min(len(metric_cols), 6))
     for i, col_name in enumerate(metric_cols[:6]):
         meta = KNOWN_COLUMNS[col_name]
@@ -142,9 +141,10 @@ def render_overview_tab(df: pd.DataFrame, summary: "DataSummary") -> None:  # no
         delta = recent_val - avg_val
 
         with cols[i]:
+            display_val = f"{recent_val:.0f}" if float(recent_val) == int(recent_val) else f"{recent_val:.1f}"
             st.metric(
                 label=meta["label"],
-                value=f"{recent_val:.0f}" if recent_val == int(recent_val) else f"{recent_val:.1f}",
+                value=display_val,
                 delta=f"{delta:+.1f} vs avg",
                 delta_color="inverse" if col_name in {"heart_rate_bpm", "bp_systolic", "bp_diastolic", "stress_score"} else "normal",
             )
@@ -176,13 +176,10 @@ def render_overview_tab(df: pd.DataFrame, summary: "DataSummary") -> None:  # no
         )
 
 
-def render_risk_tab(df: pd.DataFrame) -> "RiskAssessment":  # noqa: F821
-    """Render the risk assessment tab. Returns the assessment for reuse."""
+def render_risk_tab(df: pd.DataFrame, assessment: "RiskAssessment") -> None:  # noqa: F821
+    """Render the risk assessment tab."""
     st.markdown("### Health Risk Assessment")
     st.caption("Powered by Random Forest + Logistic Regression ensemble model")
-
-    with st.spinner("Running ML risk analysis..."):
-        assessment = assess_health_risk(df)
 
     # Risk gauge
     col1, col2 = st.columns([1, 2])
@@ -229,14 +226,15 @@ def render_risk_tab(df: pd.DataFrame) -> "RiskAssessment":  # noqa: F821
             use_container_width=True,
         )
 
-    return assessment
-
 
 def render_trends_tab(df: pd.DataFrame) -> None:
     """Render the detailed trends/visualizations tab."""
     st.markdown("### Detailed Trends & Distributions")
 
     metric_cols = get_metric_columns(df)
+    if not metric_cols:
+        st.warning("No recognized health metric columns found.")
+        return
 
     selected_metric = st.selectbox(
         "Select metric to explore:",
@@ -431,10 +429,21 @@ def main() -> None:
     """Main application entry point."""
     configure_page()
 
-    # Header
-    st.markdown('<p class="main-header">AI Health Insight Agent</p>', unsafe_allow_html=True)
+    # Hero section
     st.markdown(
-        '<p class="sub-header">ML-powered health data analysis, risk scoring, and personalized recommendations</p>',
+        """
+        <div style="text-align:center; padding: 1.5rem 0 0.5rem 0;">
+            <span style="font-size:2.8rem;">🏥</span>
+            <p class="main-header">AI Health Insight Agent</p>
+            <p class="sub-header">
+                ML-powered health data analysis, risk scoring &amp; personalized recommendations
+                <br/>
+                <span style="font-size:0.85rem; color:#95a5a6;">
+                    Random Forest + Logistic Regression ensemble &bull; 11 health metrics &bull; 100% local &amp; private
+                </span>
+            </p>
+        </div>
+        """,
         unsafe_allow_html=True,
     )
 
@@ -455,11 +464,11 @@ def main() -> None:
         st.dataframe(sample_cols, use_container_width=True, hide_index=True)
         return
 
-    # Compute summary
+    # Compute summary and run risk assessment once
     summary = compute_summary(df)
 
-    # Run risk assessment once
-    assessment = assess_health_risk(df)
+    with st.spinner("Running ML risk analysis..."):
+        assessment = assess_health_risk(df)
 
     # Tabs
     tab_overview, tab_risk, tab_trends, tab_recs, tab_tools, tab_report = st.tabs([
@@ -475,7 +484,7 @@ def main() -> None:
         render_overview_tab(df, summary)
 
     with tab_risk:
-        render_risk_tab(df)
+        render_risk_tab(df, assessment)
 
     with tab_trends:
         render_trends_tab(df)
