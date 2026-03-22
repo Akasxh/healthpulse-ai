@@ -82,7 +82,19 @@ def get_metric_columns(df: pd.DataFrame) -> list[str]:
 
 def compute_summary(df: pd.DataFrame) -> DataSummary:
     """Compute summary statistics for health data."""
+    if df.empty:
+        return DataSummary(
+            n_rows=0, n_days=0, date_range=("N/A", "N/A"),
+            available_metrics=[], missing_pct={}, stats=pd.DataFrame(),
+        )
+
     metric_cols = get_metric_columns(df)
+    if not metric_cols:
+        return DataSummary(
+            n_rows=len(df), n_days=0, date_range=("N/A", "N/A"),
+            available_metrics=[], missing_pct={}, stats=pd.DataFrame(),
+        )
+
     numeric_df = df[metric_cols]
 
     missing_pct = {col: float(df[col].isna().mean() * 100) for col in metric_cols}

@@ -38,12 +38,60 @@ def configure_page() -> None:
         initial_sidebar_state="expanded",
     )
 
-    st.markdown("""
-    <style>
+    st.markdown('''<style>
+    /* Hide Streamlit defaults */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+
+    /* Modern card styling */
+    div[data-testid="stMetric"] {
+        background: linear-gradient(135deg, #667eea11, #764ba211);
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 16px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+
+    /* Tab styling */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background: #f8fafc;
+        padding: 4px;
+        border-radius: 12px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 8px;
+        padding: 8px 20px;
+    }
+
+    /* Sidebar */
+    section[data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #1e293b, #0f172a);
+    }
+    section[data-testid="stSidebar"] * {
+        color: #e2e8f0 !important;
+    }
+
+    /* Buttons */
+    .stButton > button {
+        border-radius: 8px;
+        border: none;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        font-weight: 600;
+        transition: all 0.3s;
+    }
+    .stButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102,126,234,0.4);
+    }
+
+    /* Hero text */
     .main-header {
         font-size: 2.4rem;
         font-weight: 800;
-        background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         margin-bottom: 0;
@@ -55,17 +103,7 @@ def configure_page() -> None:
         margin-bottom: 20px;
         line-height: 1.6;
     }
-    .stMetric > div {
-        background-color: #f8f9fa;
-        border-radius: 10px;
-        padding: 10px 15px;
-        border-left: 4px solid #3498db;
-    }
-    div[data-testid="stSidebar"] {
-        background-color: #f0f2f6;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+</style>''', unsafe_allow_html=True)
 
 
 def render_sidebar() -> pd.DataFrame | None:
@@ -136,12 +174,17 @@ def render_overview_tab(df: pd.DataFrame, summary: "DataSummary") -> None:  # no
     cols = st.columns(min(len(metric_cols), 6))
     for i, col_name in enumerate(metric_cols[:6]):
         meta = KNOWN_COLUMNS[col_name]
-        recent_val = df[col_name].dropna().iloc[-1] if df[col_name].notna().any() else 0
-        avg_val = df[col_name].mean()
+        clean = df[col_name].dropna()
+        if len(clean) == 0:
+            continue
+        recent_val = float(clean.iloc[-1])
+        avg_val = float(clean.mean())
         delta = recent_val - avg_val
 
         with cols[i]:
-            display_val = f"{recent_val:.0f}" if float(recent_val) == int(recent_val) else f"{recent_val:.1f}"
+            # Integer-valued metrics display without decimals
+            int_metrics = {"heart_rate_bpm", "bp_systolic", "bp_diastolic", "steps", "calories_burned", "active_minutes", "water_intake_glasses"}
+            display_val = f"{recent_val:.0f}" if col_name in int_metrics else f"{recent_val:.1f}"
             st.metric(
                 label=meta["label"],
                 value=display_val,
@@ -431,19 +474,26 @@ def main() -> None:
 
     # Hero section
     st.markdown(
-        """
-        <div style="text-align:center; padding: 1.5rem 0 0.5rem 0;">
-            <span style="font-size:2.8rem;">🏥</span>
+        '''
+        <div style="text-align:center; padding: 2rem 0 1rem 0;">
+            <div style="font-size:3rem; margin-bottom:0.3rem;">🏥</div>
             <p class="main-header">AI Health Insight Agent</p>
             <p class="sub-header">
                 ML-powered health data analysis, risk scoring &amp; personalized recommendations
-                <br/>
-                <span style="font-size:0.85rem; color:#95a5a6;">
-                    Random Forest + Logistic Regression ensemble &bull; 11 health metrics &bull; 100% local &amp; private
-                </span>
             </p>
+            <div style="display:flex; justify-content:center; gap:24px; flex-wrap:wrap; margin-top:8px;">
+                <span style="background:#667eea15; color:#667eea; padding:4px 14px; border-radius:20px; font-size:0.82rem; font-weight:600;">
+                    RF + LR Ensemble
+                </span>
+                <span style="background:#764ba215; color:#764ba2; padding:4px 14px; border-radius:20px; font-size:0.82rem; font-weight:600;">
+                    11 Health Metrics
+                </span>
+                <span style="background:#10b98115; color:#10b981; padding:4px 14px; border-radius:20px; font-size:0.82rem; font-weight:600;">
+                    100% Local &amp; Private
+                </span>
+            </div>
         </div>
-        """,
+        ''',
         unsafe_allow_html=True,
     )
 

@@ -210,6 +210,13 @@ def assess_health_risk(df: pd.DataFrame) -> RiskAssessment:
     Returns:
         Comprehensive RiskAssessment.
     """
+    if df.empty:
+        return RiskAssessment(
+            overall_risk_score=0.0, risk_level="Low",
+            metric_risks={}, recommendations=["No data available for analysis."],
+            feature_importances={},
+        )
+
     metric_cols = get_metric_columns(df)
 
     # Per-metric risk

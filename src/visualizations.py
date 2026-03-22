@@ -14,19 +14,20 @@ from .data_utils import KNOWN_COLUMNS, get_metric_columns
 from .models import RiskAssessment
 
 
-COLOR_GOOD = "#2ecc71"
-COLOR_WARNING = "#f39c12"
-COLOR_DANGER = "#e74c3c"
-COLOR_PRIMARY = "#3498db"
-COLOR_SECONDARY = "#9b59b6"
+COLOR_GOOD = "#10b981"
+COLOR_WARNING = "#f59e0b"
+COLOR_DANGER = "#ef4444"
+COLOR_PRIMARY = "#667eea"
+COLOR_SECONDARY = "#764ba2"
 COLOR_BG = "rgba(0,0,0,0)"
 
 LAYOUT_DEFAULTS: dict[str, Any] = {
     "template": "plotly_white",
     "paper_bgcolor": COLOR_BG,
     "plot_bgcolor": COLOR_BG,
-    "font": {"family": "Inter, sans-serif"},
-    "margin": {"l": 40, "r": 20, "t": 50, "b": 40},
+    "font": {"family": "Inter, -apple-system, sans-serif", "size": 12},
+    "margin": {"l": 48, "r": 24, "t": 56, "b": 44},
+    "title_font": {"size": 16, "color": "#1e293b"},
 }
 
 
