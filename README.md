@@ -41,6 +41,26 @@ Upload your health data CSV or instantly explore with the built-in demo dataset 
 | Stress Score | `stress_score` | /10 | 1-4 |
 | Water Intake | `water_intake_glasses` | glasses | 8-12 |
 
+## Architecture
+
+```mermaid
+graph TD
+    A[User] -->|Upload CSV / Demo Mode| B[Streamlit UI]
+    B --> C[Data Processing]
+    C --> D[Sample Data Generator]
+    C --> E[CSV Parser & Validator]
+    D --> F[ML Risk Engine]
+    E --> F
+    F --> G[RF + LR Ensemble]
+    G --> H[Risk Assessment]
+    H --> I[Interactive Plotly Charts]
+    H --> J[PDF Report Generator]
+    H --> K[Recommendations Engine]
+    I --> B
+    J --> B
+    K --> B
+```
+
 ## Quick Start
 
 ```bash
