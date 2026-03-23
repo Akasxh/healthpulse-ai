@@ -7,11 +7,11 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier, VotingClassifier
+from sklearn.ensemble import IsolationForest, RandomForestClassifier, VotingClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 
-from .data_utils import KNOWN_COLUMNS, get_metric_columns
+from src.data_utils import KNOWN_COLUMNS, get_metric_columns
 
 
 @dataclass
@@ -284,6 +284,73 @@ def assess_health_risk(df: pd.DataFrame) -> RiskAssessment:
         recommendations=recommendations,
         feature_importances=importances,
     )
+
+
+def detect_anomalies(df: pd.DataFrame, contamination: float = 0.1) -> pd.DataFrame:
+    """Detect anomalous days in health data using Isolation Forest.
+
+    Args:
+        df: Health data DataFrame.
+        contamination: Expected proportion of anomalies.
+
+    Returns:
+        DataFrame with anomaly scores and labels added.
+    """
+    metric_cols = get_metric_columns(df)
+    if len(metric_cols) < 2 or len(df) < 10:
+        result = df.copy()
+        result["anomaly_score"] = 0.0
+        result["is_anomaly"] = False
+        result["anomaly_explanation"] = ""
+        return result
+
+    # Prepare features
+    features = df[metric_cols].fillna(df[metric_cols].median())
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(features)
+
+    # Fit Isolation Forest
+    iso_forest = IsolationForest(
+        contamination=contamination,
+        random_state=42,
+        n_estimators=100,
+    )
+    predictions = iso_forest.fit_predict(X_scaled)
+    scores = iso_forest.decision_function(X_scaled)
+
+    result = df.copy()
+    result["anomaly_score"] = -scores  # Higher = more anomalous
+    result["is_anomaly"] = predictions == -1
+
+    # Generate explanations for anomalies
+    explanations: list[str] = []
+    for idx in range(len(result)):
+        if not result.iloc[idx]["is_anomaly"]:
+            explanations.append("")
+            continue
+
+        # Find which metrics deviate most from their median
+        deviations: list[tuple[str, str, float]] = []
+        for col in metric_cols:
+            val = features.iloc[idx][col]
+            median = features[col].median()
+            std = features[col].std()
+            if std > 0:
+                z = abs(val - median) / std
+                if z > 1.5:
+                    meta = KNOWN_COLUMNS.get(col, {})
+                    direction = "high" if val > median else "low"
+                    deviations.append((meta.get("label", col), direction, round(z, 1)))
+
+        deviations.sort(key=lambda x: x[2], reverse=True)
+        if deviations:
+            parts = [f"{name} unusually {direction} ({z_score}\u03c3)" for name, direction, z_score in deviations[:3]]
+            explanations.append("; ".join(parts))
+        else:
+            explanations.append("Unusual combination of metric values")
+
+    result["anomaly_explanation"] = explanations
+    return result
 
 
 def _generate_recommendations(

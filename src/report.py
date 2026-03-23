@@ -7,8 +7,8 @@ from datetime import datetime
 
 from fpdf import FPDF
 
-from .data_utils import DataSummary, KNOWN_COLUMNS
-from .models import RiskAssessment
+from src.data_utils import DataSummary, KNOWN_COLUMNS
+from src.models import RiskAssessment
 
 
 class HealthReport(FPDF):
