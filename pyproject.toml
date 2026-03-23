@@ -14,3 +14,8 @@ dependencies = [
 
 [project.scripts]
 health-agent = "src.app:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]

@@ -1,29 +1,85 @@
+# Python bytecode
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
+
+# Distribution / packaging
 .Python
 build/
 dist/
 *.egg-info/
+*.egg
+*.whl
 .eggs/
+MANIFEST
+*.manifest
+*.spec
+.installed.cfg
+lib/
+lib64/
+var/
+wheels/
+share/python-wheels/
+
+# Virtual environments
 .venv/
 venv/
 ENV/
+
+# Environment files
 .env
 *.env.local
+
+# Testing
 .pytest_cache/
 .coverage
+coverage.xml
 htmlcov/
+.tox/
+.nox/
+.hypothesis/
+
+# Type checking / linting
 .mypy_cache/
 .ruff_cache/
+.pytype/
+
+# Databases
 *.db
 *.sqlite3
+
+# OS files
 .DS_Store
 Thumbs.db
+
+# IDE / Editor
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
+
+# Lock file
 uv.lock
+
+# Streamlit
+.streamlit/
+
+# Generated outputs
+*.pdf
+*.csv
+!src/**/*.csv
+
+# Logs and temp
+logs/
+tmp/
+.cache/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Node (just in case)
+node_modules/
+
+# Swarm coordination
+.swarm/

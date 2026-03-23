@@ -2,10 +2,20 @@
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+# Ensure project root is on sys.path so `from src.xxx` imports work
+# when Streamlit runs this file directly as __main__.
+_project_root = str(Path(__file__).resolve().parent.parent)
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
+
+import numpy as np
 import streamlit as st
 import pandas as pd
 
-from .data_utils import (
+from src.data_utils import (
     analyze_sleep_quality,
     calculate_bmi,
     compute_summary,
@@ -14,17 +24,20 @@ from .data_utils import (
     load_csv,
     KNOWN_COLUMNS,
 )
-from .models import assess_health_risk
-from .report import generate_report
-from .sample_data import generate_sample_data, get_sample_csv_bytes
-from .visualizations import (
+from src.models import assess_health_risk, build_ensemble_model, detect_anomalies
+from src.report import generate_report
+from src.sample_data import generate_sample_data, get_sample_csv_bytes
+from src.visualizations import (
     correlation_heatmap,
     distribution_chart,
     feature_importance_chart,
     metric_trend_chart,
     multi_metric_chart,
+    radar_comparison_chart,
     risk_gauge,
     risk_heatmap,
+    sparkline_figure,
+    anomaly_timeline_chart,
     weekly_comparison_chart,
 )
 
@@ -44,16 +57,54 @@ def configure_page() -> None:
     footer {visibility: hidden;}
     header {visibility: hidden;}
 
-    /* Modern card styling */
+    /* ===== Animations ===== */
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes gradientShift {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+    @keyframes pulseGlow {
+        0%, 100% { box-shadow: 0 2px 8px rgba(102,126,234,0.1); }
+        50% { box-shadow: 0 4px 20px rgba(102,126,234,0.25); }
+    }
+    @keyframes skeletonPulse {
+        0% { background-position: -200px 0; }
+        100% { background-position: calc(200px + 100%) 0; }
+    }
+    @keyframes countUp {
+        from { opacity: 0; transform: scale(0.5); }
+        to { opacity: 1; transform: scale(1); }
+    }
+    @keyframes slideInLeft {
+        from { opacity: 0; transform: translateX(-30px); }
+        to { opacity: 1; transform: translateX(0); }
+    }
+
+    /* Smooth page transitions */
+    .main .block-container {
+        animation: fadeInUp 0.5s ease-out;
+    }
+
+    /* Modern card styling with hover */
     div[data-testid="stMetric"] {
         background: linear-gradient(135deg, #667eea11, #764ba211);
         border: 1px solid #e2e8f0;
         border-radius: 12px;
         padding: 16px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    div[data-testid="stMetric"]:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 25px rgba(102,126,234,0.18);
+        border-color: #667eea44;
     }
 
-    /* Tab styling */
+    /* Tab styling with active indicator */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
         background: #f8fafc;
@@ -63,6 +114,14 @@ def configure_page() -> None:
     .stTabs [data-baseweb="tab"] {
         border-radius: 8px;
         padding: 8px 20px;
+        transition: all 0.3s ease;
+    }
+    .stTabs [data-baseweb="tab"]:hover {
+        background: #667eea15;
+    }
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, #667eea, #764ba2) !important;
+        color: white !important;
     }
 
     /* Sidebar */
@@ -87,13 +146,15 @@ def configure_page() -> None:
         box-shadow: 0 4px 12px rgba(102,126,234,0.4);
     }
 
-    /* Hero text */
+    /* Animated gradient hero text */
     .main-header {
         font-size: 2.4rem;
         font-weight: 800;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #667eea, #764ba2, #667eea, #10b981);
+        background-size: 300% 300%;
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
+        animation: gradientShift 6s ease infinite;
         margin-bottom: 0;
     }
     .sub-header {
@@ -102,6 +163,166 @@ def configure_page() -> None:
         margin-top: -10px;
         margin-bottom: 20px;
         line-height: 1.6;
+    }
+
+    /* Custom scrollbar */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb { background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #5a6fd6; }
+
+    /* Table styling */
+    .stDataFrame table { border-collapse: separate; border-spacing: 0; }
+    .stDataFrame thead th {
+        background: linear-gradient(135deg, #667eea, #764ba2) !important;
+        color: white !important;
+        font-weight: 600;
+        padding: 10px 12px;
+    }
+    .stDataFrame tbody tr:nth-child(even) { background: #f8fafc; }
+    .stDataFrame tbody tr:hover { background: #667eea10 !important; transition: background 0.2s; }
+    .stDataFrame td { padding: 8px 12px; }
+
+    /* Toast notification styling */
+    .stAlert {
+        border-radius: 10px !important;
+        border: none !important;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        animation: slideInLeft 0.4s ease-out;
+    }
+
+    /* Health score card */
+    .health-score-card {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        border-radius: 16px;
+        padding: 28px 32px;
+        color: white;
+        text-align: center;
+        animation: fadeInUp 0.6s ease-out, pulseGlow 3s ease-in-out infinite;
+        position: relative;
+        overflow: hidden;
+    }
+    .health-score-card::before {
+        content: "";
+        position: absolute;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 60%);
+        animation: gradientShift 8s linear infinite;
+    }
+    .health-score-number {
+        font-size: 3.5rem;
+        font-weight: 900;
+        line-height: 1;
+        animation: countUp 0.8s ease-out;
+    }
+    .health-score-label {
+        font-size: 0.95rem;
+        opacity: 0.9;
+        margin-top: 4px;
+    }
+
+    /* Risk badge */
+    .risk-badge {
+        display: inline-block;
+        padding: 4px 16px;
+        border-radius: 20px;
+        font-weight: 700;
+        font-size: 0.85rem;
+        letter-spacing: 0.5px;
+        margin-top: 8px;
+    }
+    .risk-badge-low { background: rgba(16,185,129,0.2); color: #059669; }
+    .risk-badge-moderate { background: rgba(245,158,11,0.2); color: #d97706; }
+    .risk-badge-high { background: rgba(239,68,68,0.2); color: #dc2626; }
+    .risk-badge-critical { background: rgba(192,57,43,0.3); color: #c0392b; }
+
+    /* Data quality widget */
+    .data-quality-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 6px 0;
+        border-bottom: 1px solid #334155;
+        font-size: 0.85rem;
+    }
+    .data-quality-item:last-child { border-bottom: none; }
+
+    /* Recommendation cards */
+    .rec-card {
+        border-radius: 10px;
+        padding: 16px 20px;
+        margin: 10px 0;
+        animation: fadeInUp 0.4s ease-out;
+        transition: transform 0.2s;
+    }
+    .rec-card:hover { transform: translateX(4px); }
+    .rec-cardiovascular { border-left: 4px solid #ef4444; background: #fef2f2; }
+    .rec-sleep { border-left: 4px solid #8b5cf6; background: #f5f3ff; }
+    .rec-activity { border-left: 4px solid #10b981; background: #f0fdf4; }
+    .rec-nutrition { border-left: 4px solid #f59e0b; background: #fffbeb; }
+    .rec-general { border-left: 4px solid #3b82f6; background: #eff6ff; }
+    .quick-win-badge {
+        display: inline-block;
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: white;
+        font-size: 0.7rem;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-weight: 600;
+        margin-left: 8px;
+        vertical-align: middle;
+    }
+    .severity-high { border-left-width: 6px !important; }
+    .severity-normal { border-left-width: 3px; }
+
+    /* Status dots */
+    .status-dot {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-right: 6px;
+    }
+    .status-green { background: #10b981; box-shadow: 0 0 6px #10b98155; }
+    .status-yellow { background: #f59e0b; box-shadow: 0 0 6px #f59e0b55; }
+    .status-red { background: #ef4444; box-shadow: 0 0 6px #ef444455; }
+
+    /* Skeleton loading */
+    .skeleton {
+        background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+        background-size: 200px 100%;
+        animation: skeletonPulse 1.5s ease-in-out infinite;
+        border-radius: 8px;
+    }
+
+    /* Footer */
+    .app-footer {
+        margin-top: 60px;
+        padding: 24px 0 16px 0;
+        border-top: 1px solid #e2e8f0;
+        text-align: center;
+        color: #94a3b8;
+        font-size: 0.82rem;
+        line-height: 1.8;
+        animation: fadeInUp 0.6s ease-out;
+    }
+    .app-footer a { color: #667eea; text-decoration: none; }
+    .app-footer a:hover { text-decoration: underline; }
+
+    /* Responsive tweaks */
+    @media (max-width: 768px) {
+        .main-header { font-size: 1.6rem !important; }
+        .sub-header { font-size: 0.85rem !important; }
+        .health-score-number { font-size: 2.5rem !important; }
+        .health-score-card { padding: 20px 16px; }
+        div[data-testid="stMetric"] { padding: 10px; }
+        .stTabs [data-baseweb="tab"] { padding: 6px 12px; font-size: 0.85rem; }
+    }
+    @media (max-width: 480px) {
+        .main-header { font-size: 1.3rem !important; }
+        .health-score-number { font-size: 2rem !important; }
     }
 </style>''', unsafe_allow_html=True)
 
@@ -147,6 +368,12 @@ def render_sidebar() -> pd.DataFrame | None:
                 except Exception as e:
                     st.error(f"Error reading file: {e}")
 
+        # Data quality indicator
+        if df is not None:
+            st.markdown("---")
+            st.markdown("### Data Quality")
+            _render_data_quality_widget(df)
+
         st.markdown("---")
         st.markdown("### About")
         st.markdown(
@@ -160,6 +387,53 @@ def render_sidebar() -> pd.DataFrame | None:
         )
 
     return df
+
+
+def _render_data_quality_widget(df: pd.DataFrame) -> None:
+    """Render data quality metrics in the sidebar.
+
+    Shows completeness, date range, metric count, and missing data warnings.
+    """
+    metric_cols = get_metric_columns(df)
+    total_cells = len(df) * len(metric_cols) if metric_cols else 1
+    missing_cells = sum(int(df[col].isna().sum()) for col in metric_cols) if metric_cols else 0
+    completeness = ((total_cells - missing_cells) / total_cells * 100) if total_cells > 0 else 0
+
+    date_min = df["date"].min().strftime("%b %d, %Y") if "date" in df.columns else "N/A"
+    date_max = df["date"].max().strftime("%b %d, %Y") if "date" in df.columns else "N/A"
+
+    bar_color = "#10b981" if completeness >= 90 else "#f59e0b" if completeness >= 70 else "#ef4444"
+
+    st.markdown(f'''
+    <div style="padding:4px 0;">
+        <div class="data-quality-item">
+            <span>Completeness</span>
+            <span style="font-weight:600; color:{bar_color};">{completeness:.1f}%</span>
+        </div>
+        <div style="background:#334155; border-radius:4px; height:6px; margin:4px 0 8px 0;">
+            <div style="background:{bar_color}; border-radius:4px; height:6px; width:{min(completeness, 100):.0f}%;"></div>
+        </div>
+        <div class="data-quality-item">
+            <span>Date Range</span>
+            <span style="font-weight:600; font-size:0.8rem;">{date_min} - {date_max}</span>
+        </div>
+        <div class="data-quality-item">
+            <span>Metrics Available</span>
+            <span style="font-weight:600;">{len(metric_cols)} / {len(KNOWN_COLUMNS)}</span>
+        </div>
+        <div class="data-quality-item">
+            <span>Total Records</span>
+            <span style="font-weight:600;">{len(df)}</span>
+        </div>
+    </div>
+    ''', unsafe_allow_html=True)
+
+    # Missing data warnings
+    for col in metric_cols:
+        missing_pct = df[col].isna().mean() * 100
+        if missing_pct > 10:
+            label = KNOWN_COLUMNS.get(col, {}).get("label", col)
+            st.warning(f"{label}: {missing_pct:.0f}% missing")
 
 
 def render_overview_tab(df: pd.DataFrame, summary: "DataSummary") -> None:  # noqa: F821
@@ -269,6 +543,39 @@ def render_risk_tab(df: pd.DataFrame, assessment: "RiskAssessment") -> None:  # 
             use_container_width=True,
         )
 
+    # Anomaly Detection section
+    st.markdown("---")
+    st.markdown("#### Anomaly Detection")
+    st.caption("Powered by Isolation Forest — identifies days with unusual health patterns")
+
+    df_anomalies = detect_anomalies(df)
+
+    anomaly_count = int(df_anomalies["is_anomaly"].sum())
+    if anomaly_count > 0:
+        st.warning(f"Detected {anomaly_count} anomalous day(s) in your health data")
+
+        # Show anomaly timeline
+        metric_cols = get_metric_columns(df)
+        selected = st.selectbox(
+            "View anomalies for metric:",
+            ["Overall Score"] + metric_cols,
+            format_func=lambda c: "Overall Anomaly Score" if c == "Overall Score" else KNOWN_COLUMNS.get(c, {}).get("label", c),
+            key="anomaly_metric_select",
+        )
+
+        metric_to_plot = None if selected == "Overall Score" else selected
+        fig = anomaly_timeline_chart(df_anomalies, metric_to_plot)
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Show anomaly details table
+        with st.expander("Anomaly Details", expanded=False):
+            anomaly_rows = df_anomalies[df_anomalies["is_anomaly"]][["date", "anomaly_score", "anomaly_explanation"]].copy()
+            anomaly_rows.columns = ["Date", "Anomaly Score", "Explanation"]
+            anomaly_rows = anomaly_rows.sort_values("Anomaly Score", ascending=False)
+            st.dataframe(anomaly_rows, use_container_width=True, hide_index=True)
+    else:
+        st.success("No anomalous days detected — your health patterns are consistent!")
+
 
 def render_trends_tab(df: pd.DataFrame) -> None:
     """Render the detailed trends/visualizations tab."""
@@ -340,10 +647,109 @@ def render_recommendations_tab(assessment: "RiskAssessment") -> None:  # noqa: F
     )
 
 
-def render_tools_tab() -> None:
-    """Render the health tools tab (BMI calculator, calorie estimator, etc.)."""
-    st.markdown("### Health Tools")
+def render_simulator_tab(df: pd.DataFrame, assessment: "RiskAssessment") -> None:  # noqa: F821
+    """Render the What-If Health Simulator tab."""
+    st.markdown("### What-If Health Simulator")
+    st.caption(
+        "Drag the sliders to simulate different health scenarios "
+        "and see how your risk score changes in real-time"
+    )
 
+    recent = df.tail(7)
+    col_sliders, col_results = st.columns([1, 1])
+
+    slider_configs: dict[str, dict[str, float]] = {
+        "heart_rate_bpm": {"min": 40, "max": 150, "step": 1},
+        "bp_systolic": {"min": 80, "max": 200, "step": 1},
+        "bp_diastolic": {"min": 40, "max": 120, "step": 1},
+        "sleep_hours": {"min": 3.0, "max": 12.0, "step": 0.5},
+        "steps": {"min": 0, "max": 25000, "step": 500},
+        "active_minutes": {"min": 0, "max": 180, "step": 5},
+        "stress_score": {"min": 1.0, "max": 10.0, "step": 0.5},
+        "spo2_percent": {"min": 88.0, "max": 100.0, "step": 0.5},
+        "weight_kg": {"min": 30.0, "max": 200.0, "step": 0.5},
+        "water_intake_glasses": {"min": 0, "max": 16, "step": 1},
+    }
+
+    with col_sliders:
+        st.markdown("#### Adjust Your Metrics")
+        simulated_values: dict[str, float] = {}
+
+        for col_name, config in slider_configs.items():
+            if col_name not in df.columns:
+                continue
+            meta = KNOWN_COLUMNS[col_name]
+            current_val = float(recent[col_name].mean())
+            lo, hi = meta["healthy_range"]
+
+            simulated_values[col_name] = st.slider(
+                f"{meta['label']} ({meta['unit']})",
+                min_value=float(config["min"]),
+                max_value=float(config["max"]),
+                value=float(round(current_val, 1)),
+                step=float(config["step"]),
+                help=f"Healthy range: {lo}-{hi} {meta['unit']}",
+                key=f"sim_{col_name}",
+            )
+
+    with col_results:
+        st.markdown("#### Simulated Risk Assessment")
+
+        model, scaler, model_features = build_ensemble_model()
+
+        defaults: dict[str, float] = {
+            "heart_rate_bpm": 72, "bp_systolic": 122, "bp_diastolic": 78,
+            "sleep_hours": 7.0, "steps": 8000, "active_minutes": 45,
+            "stress_score": 5, "spo2_percent": 97, "weight_kg": 75,
+            "water_intake_glasses": 7,
+        }
+
+        feature_vector = [
+            simulated_values.get(feat, defaults.get(feat, 0))
+            for feat in model_features
+        ]
+
+        X_input = np.array(feature_vector).reshape(1, -1)
+        X_scaled = scaler.transform(X_input)
+        probas = model.predict_proba(X_scaled)[0]
+        sim_risk = float(probas[1] * 40 + probas[2] * 100) if len(probas) == 3 else 50.0
+        sim_risk = round(min(100.0, max(0.0, sim_risk)), 1)
+
+        fig = risk_gauge(sim_risk, title="Simulated Risk Score")
+        st.plotly_chart(fig, use_container_width=True)
+
+        actual_risk = assessment.overall_risk_score
+        delta = sim_risk - actual_risk
+
+        col_a, col_b = st.columns(2)
+        with col_a:
+            st.metric("Current Risk", f"{actual_risk}/100")
+        with col_b:
+            st.metric(
+                "Simulated Risk",
+                f"{sim_risk}/100",
+                delta=f"{delta:+.1f}",
+                delta_color="inverse",
+            )
+
+        st.markdown("#### Metric Status")
+        for col_name, val in simulated_values.items():
+            meta = KNOWN_COLUMNS.get(col_name, {})
+            lo, hi = meta.get("healthy_range", (0, 100))
+            label = meta.get("label", col_name)
+            unit = meta.get("unit", "")
+            if lo <= val <= hi:
+                st.markdown(f"**{label}**: {val} {unit} — in range")
+            else:
+                st.markdown(f"**{label}**: {val} {unit} — outside {lo}-{hi}")
+
+    # Keep health tools as an expander below the simulator
+    with st.expander("Health Tools (BMI Calculator & Calorie Estimator)"):
+        _render_health_tools()
+
+
+def _render_health_tools() -> None:
+    """Render BMI calculator and calorie estimator."""
     tool_tab1, tool_tab2 = st.tabs(["BMI Calculator", "Calorie Estimator"])
 
     with tool_tab1:
@@ -521,12 +927,12 @@ def main() -> None:
         assessment = assess_health_risk(df)
 
     # Tabs
-    tab_overview, tab_risk, tab_trends, tab_recs, tab_tools, tab_report = st.tabs([
+    tab_overview, tab_risk, tab_trends, tab_recs, tab_sim, tab_report = st.tabs([
         "Overview",
         "Risk Assessment",
         "Trends & Charts",
         "Recommendations",
-        "Health Tools",
+        "What-If Simulator",
         "Report & Sleep",
     ])
 
@@ -542,8 +948,8 @@ def main() -> None:
     with tab_recs:
         render_recommendations_tab(assessment)
 
-    with tab_tools:
-        render_tools_tab()
+    with tab_sim:
+        render_simulator_tab(df, assessment)
 
     with tab_report:
         render_report_tab(df, summary, assessment)
